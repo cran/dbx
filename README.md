@@ -6,14 +6,15 @@
 - High performance batch operations
 - Safe inserts, updates, and deletes without writing SQL
 - Upserts!!
-- Plays nicely with auto-incrementing primary keys
+- Great date and time support
+- Works well with auto-incrementing primary keys
 - Built on top of [DBI](https://cran.r-project.org/package=DBI)
 
 Designed for both research and production environments
 
 Supports Postgres, MySQL, SQLite, and more
 
-![Screenshot](https://gist.github.com/ankane/b6988db2802aca68a589b31e41b44195/raw/b8197d9a0506e02b83910f2659a61e90fe69f41b/dbx.png)
+![Screenshot](https://gist.github.com/ankane/b6988db2802aca68a589b31e41b44195/raw/619e19addf388c14e905ed475121fe5806bf8991/dbx.png)
 
 [![Build Status](https://travis-ci.org/ankane/dbx.svg?branch=master)](https://travis-ci.org/ankane/dbx)
 
@@ -23,20 +24,21 @@ Install dbx
 
 ```r
 install.packages("devtools")
-devtools::install_github("ankane/dbx")
+devtools::install_github("ankane/dbx@v0.2.1")
 ```
 
-And follow the instructions for your database library
+And follow the instructions for your database
 
 - [Postgres](#postgres)
 - [MySQL](#mysql)
 - [SQLite](#sqlite)
+- [Redshift](#redshift)
 - [Others](#others)
 
 To install with [Jetpack](https://github.com/ankane/jetpack), use:
 
 ```r
-jetpack::add("dbx", remote="ankane/dbx")
+jetpack::add("dbx", remote="ankane/dbx@v0.2.1")
 ```
 
 ### Postgres
@@ -95,6 +97,10 @@ library(dbx)
 db <- dbxConnect(adapter="sqlite", dbname=":memory:")
 ```
 
+### Redshift
+
+For Redshift, follow the [Postgres instructions](#postgres).
+
 ### Others
 
 Install the appropriate R package and use:
@@ -120,10 +126,14 @@ Insert records
 ```r
 table <- "forecasts"
 records <- data.frame(temperature=c(32, 25))
-inserts <- dbxInsert(db, table, records)
+dbxInsert(db, table, records)
 ```
 
-Returns a data frame of inserted rows. For Postgres, this includes auto-incremented primary keys.
+If you use auto-incrementing ids in Postgres, you can get the ids of newly inserted rows by passing the column name:
+
+```r
+dbxInsert(db, table, records, returning=c("id"))
+```
 
 ### Update
 
@@ -144,14 +154,18 @@ Use `where_cols` to specify the columns used for lookup. Other columns are writt
 
 ```r
 records <- data.frame(id=c(2, 3), temperature=c(20, 25))
-upserts <- dbxUpsert(db, table, records, where_cols=c("id"))
+dbxUpsert(db, table, records, where_cols=c("id"))
 ```
-
-Returns a data frame of upserted rows. For Postgres, this includes auto-incremented primary keys.
 
 Use `where_cols` to specify the columns used for lookup. There must be a unique index on them, or an error will be thrown.
 
 *Only available for PostgreSQL 9.5+, MySQL 5.5+, and SQLite 3.24+*
+
+If you use auto-incrementing ids in Postgres, you can get the ids of newly upserted rows by passing the column name:
+
+```r
+dbxUpsert(db, table, records, where_cols=c("id"), returning=c("id"))
+```
 
 ### Delete
 
@@ -214,6 +228,24 @@ If you have multiple databases, use a different variable name, and:
 db <- dbxConnect(url=Sys.getenv("OTHER_DATABASE_URL"))
 ```
 
+## Security
+
+When connecting to a remote database, make sure your connection is secure.
+
+With Postgres, use:
+
+```r
+db <- dbxConnect(adapter="postgres", sslmode="verify-full", sslrootcert="ca.pem")
+```
+
+With RMariaDB, use:
+
+```r
+db <- dbxConnect(adapter="mysql", ssl.ca="ca.pem")
+```
+
+Please [let us know](https://github.com/ankane/dbx/issues/new) if you have a way that works with RMySQL.
+
 ## Batching
 
 By default, operations are performed in a single statement or transaction. This is better for performance and prevents partial writes on failures. However, when working with large data frames on production systems, it can be better to break writes into batches. Use the `batch_size` option to do this.
@@ -256,6 +288,113 @@ DBI::dbWithTransaction(db, {
 })
 ```
 
+## Data Type Notes
+
+### Dates & Times
+
+Dates are returned as `Date` objects and times as `POSIXct` objects. Times are stored in the database in UTC and converted to your local time zone when retrieved.
+
+Times without dates are returned as `character` vectors since R has no built-in support for this type. If you use [hms](https://cran.r-project.org/package=hms), you can convert columns with:
+
+```r
+records$column <- hms::as.hms(records$column)
+```
+
+SQLite does not have support for `TIME` columns, so we recommend storing as `VARCHAR`.
+
+### JSON
+
+JSON and JSONB columns are returned as `character` vectors. You can use [jsonlite](https://cran.r-project.org/package=jsonlite) to parse them with:
+
+```r
+records$column <- lapply(records$column, jsonlite::fromJSON)
+```
+
+SQLite does not have support for `JSON` columns, so we recommend storing as `TEXT`.
+
+### Binary Data
+
+BLOB and BYTEA columns are returned as `raw` vectors.
+
+## Data Type Limitations
+
+### Dates & Times
+
+RSQLite does not currently provide enough info to automatically typecast dates and times. You can manually typecast date columns with:
+
+```r
+records$column <- as.Date(records$column)
+```
+
+And time columns with:
+
+```r
+records$column <- as.POSIXct(records$column, tz="Etc/UTC")
+attr(records$column, "tzone") <- Sys.timezone()
+```
+
+### Booleans
+
+RMariaDB and RSQLite do not currently provide enough info to automatically typecast booleans. You can manually typecast with:
+
+```r
+records$column <- records$column != 0
+```
+
+### JSON
+
+RMariaDB does [not currently support JSON](https://github.com/r-dbi/DBI/issues/203).
+
+### Binary Data
+
+RMySQL can write BLOB columns, but [can’t retrieve them directly](https://github.com/r-dbi/RMySQL/issues/123). To workaround this, use:
+
+```r
+records <- dbxSelect(db, "SELECT HEX(column) AS column FROM table")
+
+hexToRaw <- function(x) {
+  y <- strsplit(x, "")[[1]]
+  z <- paste0(y[c(TRUE, FALSE)], y[c(FALSE, TRUE)])
+  as.raw(as.hexmode(z))
+}
+
+records$column <- lapply(records$column, hexToRaw)
+```
+
+## Connection Pooling
+
+Install the [pool](https://cran.r-project.org/package=pool) package
+
+```r
+install.packages("pool")
+```
+
+Create a pool
+
+```r
+library(pool)
+
+factory <- function() {
+  dbxConnect(adapter="postgres", ...)
+}
+
+pool <- poolCreate(factory, maxSize=5)
+```
+
+Run queries
+
+```ruby
+conn <- poolCheckout(pool)
+
+tryCatch({
+  dbxSelect(conn, "SELECT * FROM forecasts")
+}, finally={
+  poolReturn(conn)
+})
+```
+
+In the future, dbx commands may work directly with pools.
+
 ## Reference
 
 To close a connection, use:
@@ -270,6 +409,30 @@ All connections are simply [DBI](https://cran.r-project.org/package=DBI) connect
 dbGetInfo(db)
 ```
 
+## Upgrading
+
+### 0.2.0
+
+Version 0.2.0 brings a number of fixes and improvements to data types.
+
+However, there a few breaking changes to be aware of:
+
+- The `dbxInsert` and `dbxUpsert` functions no longer return a data frame by default. For MySQL and SQLite, the data frame was just the `records` argument. For Postgres, if you use auto-incrementing primary keys, the data frame contained ids of the newly inserted/upserted records. To get the ids, pass name of the column as the `returning` argument:
+
+  ```r
+  dbxInsert(db, table, records, returning=c("id"))
+  ```
+
+- `timestamp without time zone` columns in Postgres are now stored in UTC instead of local time by default. This does not affect `timestamp with time zone` columns. To keep the previous behavior, use:
+
+  ```r
+  dbxConnect(adapter="postgres", storage_tz=Sys.timezone(), ...)
+  ```
+
+## History
+
+View the [changelog](https://github.com/ankane/dbx/blob/master/NEWS.md)
+
 ## Contributing
 
 Everyone is encouraged to help improve this project. Here are a few ways you can help:
@@ -278,3 +441,24 @@ Everyone is encouraged to help improve this project. Here are a few ways you can
 - Fix bugs and [submit pull requests](https://github.com/ankane/dbx/pulls)
 - Write, clarify, or fix documentation
 - Suggest or add new features
+
+To get started with development and testing:
+
+```sh
+git clone https://github.com/ankane/dbx.git
+cd dbx
+
+# create Postgres database
+createdb dbx_test
+
+# create MySQL database
+mysql -u root -e "CREATE DATABASE dbx_test"
+```
+
+In R, do:
+
+```r
+install.packages("devtools")
+devtools::install_deps(dependencies=TRUE)
+devtools::test()
+```

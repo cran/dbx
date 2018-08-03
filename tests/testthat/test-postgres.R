@@ -1,8 +1,8 @@
-context("postgresql")
+context("postgres")
 
 skip_on_cran()
 
-db <- dbxConnect(adapter="rpostgresql", dbname="dbx_test")
+db <- dbxConnect(adapter="rpostgres", dbname="dbx_test")
 
 dbExecute(db, "DROP TABLE IF EXISTS orders")
 dbExecute(db, "CREATE TABLE orders (id SERIAL PRIMARY KEY, city text)")
@@ -14,7 +14,7 @@ runTests(db)
 
 test_that("datetimes with storage_tz works", {
   inTimeZone("America/Chicago", {
-    db2 <- dbxConnect(adapter="rpostgresql", dbname="dbx_test", storage_tz="America/Chicago")
+    db2 <- dbxConnect(adapter="rpostgres", dbname="dbx_test", storage_tz="America/Chicago")
     dbxDelete(db2, "events")
 
     t1 <- as.POSIXct("2018-01-01 12:30:55", tz="America/New_York")
@@ -32,4 +32,12 @@ test_that("datetimes with storage_tz works", {
 
     dbxDisconnect(db2)
   })
+})
+
+test_that("connect with url works", {
+  con2 <- dbxConnect(url="postgres://localhost/dbx_test")
+  res <- dbxSelect(con2, "SELECT 1 AS hi")
+  dbxDisconnect(con2)
+  exp <- data.frame(hi=c(1))
+  expect_equal(res, exp)
 })
