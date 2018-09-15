@@ -1,5 +1,9 @@
 #' @importFrom DBI dbConnect dbDisconnect dbExecute dbQuoteIdentifier dbQuoteLiteral dbSendQuery dbFetch dbClearResult dbHasCompleted dbColumnInfo dbWithTransaction
 
+isPostgres <- function(conn) {
+  isRPostgreSQL(conn) || isRPostgres(conn) || isODBCPostgres(conn)
+}
+
 isRPostgreSQL <- function(conn) {
   inherits(conn, "PostgreSQLConnection")
 }
@@ -8,8 +12,8 @@ isRPostgres <- function(conn) {
   inherits(conn, "PqConnection")
 }
 
-isPostgres <- function(conn) {
-  isRPostgreSQL(conn) || isRPostgres(conn)
+isODBCPostgres <- function(conn) {
+  inherits(conn, "PostgreSQL")
 }
 
 isRMySQL <- function(conn) {
@@ -17,7 +21,7 @@ isRMySQL <- function(conn) {
 }
 
 isMySQL <- function(conn) {
-  isRMySQL(conn) || isRMariaDB(conn)
+  isRMySQL(conn) || isRMariaDB(conn) || isODBCMySQL(conn)
 }
 
 isRMariaDB <- function(conn) {
@@ -26,6 +30,18 @@ isRMariaDB <- function(conn) {
 
 isSQLite <- function(conn) {
   inherits(conn, "SQLiteConnection")
+}
+
+isODBCMySQL <- function(conn) {
+  inherits(conn, "MySQL")
+}
+
+isSQLServer <- function(conn) {
+  inherits(conn, "Microsoft SQL Server")
+}
+
+isODBC <- function(conn) {
+  !is.null(attr(conn, "info")$odbc.version)
 }
 
 equalClause <- function(cols, row) {
@@ -127,7 +143,9 @@ selectOrExecute <- function(conn, sql, records, returning) {
 
 execute <- function(conn, statement) {
   statement <- processStatement(statement)
-  dbExecute(conn, statement)
+  timeStatement(statement, {
+    dbExecute(conn, statement)
+  })
 }
 
 processStatement <- function(statement) {
@@ -135,19 +153,31 @@ processStatement <- function(statement) {
 
   if (!is.null(comment)) {
     if (isTRUE(comment)) {
-      comment <- paste0("script:", sub(".*=", "", commandArgs()[4]))
+      comment <- paste0("script:", scriptName())
     }
     statement <- paste0(statement, " /*", comment, "*/")
   }
 
-  verbose <- getOption("dbx_verbose")
-  if (is.function(verbose)) {
-    verbose(statement)
-  } else if (any(verbose)) {
-    message(statement)
-  }
-
   statement
+}
+
+scriptName <- function() {
+  sub(".*=", "", commandArgs()[4])
+}
+
+timeStatement <- function(statement, code) {
+  started_at <- Sys.time()
+
+  tryCatch(code, finally={
+    duration <- round(as.double(difftime(Sys.time(), started_at)) * 1000, 1)
+
+    verbose <- getOption("dbx_logging", getOption("dbx_verbose"))
+    if (is.function(verbose)) {
+      verbose(statement)
+    } else if (any(verbose)) {
+      message(paste0("(", duration, "ms) ", statement))
+    }
+  })
 }
 
 inBatches <- function(records, batch_size, f) {
@@ -212,7 +242,7 @@ quoteRecords <- function(conn, records) {
         col <- format(col, tz=storageTimeZone(conn), "%Y-%m-%d %H:%M:%OS6 %Z")
       } else if (isTime(col)) {
         col <- format(col)
-      } else if (isLogical(col) && isRPostgreSQL(conn)) {
+      } else if (isLogical(col) && (isRPostgreSQL(conn) || isODBCPostgres(conn))) {
         col <- as.character(col)
       } else if (isBinary(col)) {
         if (isRPostgreSQL(conn)) {
@@ -225,6 +255,14 @@ quoteRecords <- function(conn, records) {
     } else if (isSQLite(conn)) {
       # since no standard, store dates and datetimes in the same format as Rails
       # store times without dates as strings to keep things simple
+      if (isDatetime(col)) {
+        col <- format(col, tz=storageTimeZone(conn), "%Y-%m-%d %H:%M:%OS6")
+      } else if (isDate(col)) {
+        col <- format(col)
+      } else if (isTime(col)) {
+        col <- format(col)
+      }
+    } else if (isSQLServer(conn)) {
       if (isDatetime(col)) {
         col <- format(col, tz=storageTimeZone(conn), "%Y-%m-%d %H:%M:%OS6")
       } else if (isDate(col)) {

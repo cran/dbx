@@ -3,6 +3,7 @@
 #' @param url A database URL
 #' @param adapter The database adapter to use
 #' @param storage_tz The time zone timestamps are stored in
+#' @param variables Session variables
 #' @param ... Arguments to pass to dbConnect
 #' @export
 #' @examples
@@ -20,7 +21,7 @@
 #' # Others
 #' db <- dbxConnect(adapter=odbc(), database="mydb")
 #' }
-dbxConnect <- function(url=NULL, adapter=NULL, storage_tz=NULL, ...) {
+dbxConnect <- function(url=NULL, adapter=NULL, storage_tz=NULL, variables=list(), ...) {
   if (is.null(adapter) && is.null(url)) {
     url <- Sys.getenv("DATABASE_URL")
   }
@@ -85,22 +86,26 @@ dbxConnect <- function(url=NULL, adapter=NULL, storage_tz=NULL, ...) {
     obj <- findAdapter(adapter)
   }
 
+  if (is.null(params$fallback_application_name) && (inherits(obj, "PqDriver") || inherits(obj, "PostgreSQLDriver"))) {
+    params$fallback_application_name <- scriptName()
+  }
+
   if (inherits(obj, "PostgreSQLDriver")) {
-    if (!is.null(params$sslmode) || !is.null(params$sslrootcert)) {
-      dbname <- list(dbname=params$dbname)
-      if (!is.null(params$sslmode)) {
-        dbname$sslmode <- params$sslmode
-        params$sslmode <- NULL
+    dbname <- list(dbname=params$dbname)
+
+    for (i in c("sslmode", "sslrootcert", "sslcert", "sslkey", "sslcrl", "connect_timeout", "fallback_application_name")) {
+      if (!is.null(params[[i]])) {
+        dbname[[i]] <- params[[i]]
+        params[[i]] <- NULL
       }
-      if (!is.null(params$sslrootcert)) {
-        dbname$sslrootcert <- params$sslrootcert
-        params$sslrootcert <- NULL
-      }
+    }
+
+    if (length(dbname) > 1) {
       params$dbname <- toConnStr(dbname)
     }
   }
 
-  if (is.null(params$bigint) && (inherits(obj, "PqDriver") || inherits(obj, "MariaDBDriver"))) {
+  if (is.null(params$bigint) && (inherits(obj, "PqDriver") || inherits(obj, "MariaDBDriver") || inherits(obj, "OdbcDriver"))) {
     params$bigint <- "numeric"
   }
 
@@ -115,10 +120,15 @@ dbxConnect <- function(url=NULL, adapter=NULL, storage_tz=NULL, ...) {
   }
 
   # other adapters do this automatically
-  if (isRPostgreSQL(conn)) {
+  if (isRPostgreSQL(conn) || isODBCPostgres(conn)) {
     dbExecute(conn, "SET timezone TO 'UTC'")
-  } else if (isRMySQL(conn)) {
+  } else if (isRMySQL(conn) || isODBCMySQL(conn)) {
     dbExecute(conn, "SET time_zone = '+00:00'")
+  }
+
+  for (k in names(variables)) {
+    # variables not protected against injection
+    dbExecute(conn, paste0("SET ", k, " = ", variables[[k]]))
   }
 
   conn

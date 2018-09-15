@@ -16,15 +16,14 @@ Supports Postgres, MySQL, SQLite, and more
 
 ![Screenshot](https://gist.github.com/ankane/b6988db2802aca68a589b31e41b44195/raw/619e19addf388c14e905ed475121fe5806bf8991/dbx.png)
 
-[![Build Status](https://travis-ci.org/ankane/dbx.svg?branch=master)](https://travis-ci.org/ankane/dbx)
+[![Build Status](https://travis-ci.org/ankane/dbx.svg?branch=master)](https://travis-ci.org/ankane/dbx) [![CRAN status](https://www.r-pkg.org/badges/version/dbx)](https://cran.r-project.org/package=dbx)
 
 ## Installation
 
 Install dbx
 
 ```r
-install.packages("devtools")
-devtools::install_github("ankane/dbx@v0.2.1")
+install.packages("dbx")
 ```
 
 And follow the instructions for your database
@@ -32,13 +31,14 @@ And follow the instructions for your database
 - [Postgres](#postgres)
 - [MySQL](#mysql)
 - [SQLite](#sqlite)
+- [SQL Server](#sql-server)
 - [Redshift](#redshift)
 - [Others](#others)
 
 To install with [Jetpack](https://github.com/ankane/jetpack), use:
 
 ```r
-jetpack::add("dbx", remote="ankane/dbx@v0.2.1")
+jetpack::add("dbx")
 ```
 
 ### Postgres
@@ -97,6 +97,24 @@ library(dbx)
 db <- dbxConnect(adapter="sqlite", dbname=":memory:")
 ```
 
+### SQL Server
+
+Install the R package
+
+```r
+install.packages("odbc")
+```
+
+And use:
+
+```r
+library(dbx)
+
+db <- dbxConnect(adapter=odbc::odbc(), database="mydb")
+```
+
+You can also pass `uid`, `pwd`, `server`, and `port`.
+
 ### Redshift
 
 For Redshift, follow the [Postgres instructions](#postgres).
@@ -106,7 +124,7 @@ For Redshift, follow the [Postgres instructions](#postgres).
 Install the appropriate R package and use:
 
 ```r
-db <- dbxConnect(adapter=odbc(), database="mydb")
+db <- dbxConnect(adapter=odbc::odbc(), database="mydb")
 ```
 
 ## Operations
@@ -187,7 +205,7 @@ dbxDelete(db, table)
 Log all SQL queries with:
 
 ```r
-options(dbx_verbose=TRUE)
+options(dbx_logging=TRUE)
 ```
 
 Customize logging by passing a function
@@ -197,7 +215,7 @@ logQuery <- function(sql) {
   # your logging code
 }
 
-options(dbx_verbose=logQuery)
+options(dbx_logging=logQuery)
 ```
 
 ## Database Credentials
@@ -227,24 +245,6 @@ If you have multiple databases, use a different variable name, and:
 ```r
 db <- dbxConnect(url=Sys.getenv("OTHER_DATABASE_URL"))
 ```
-
-## Security
-
-When connecting to a remote database, make sure your connection is secure.
-
-With Postgres, use:
-
-```r
-db <- dbxConnect(adapter="postgres", sslmode="verify-full", sslrootcert="ca.pem")
-```
-
-With RMariaDB, use:
-
-```r
-db <- dbxConnect(adapter="mysql", ssl.ca="ca.pem")
-```
-
-Please [let us know](https://github.com/ankane/dbx/issues/new) if you have a way that works with RMySQL.
 
 ## Batching
 
@@ -394,6 +394,53 @@ tryCatch({
 ```
 
 In the future, dbx commands may work directly with pools.
+
+## Security
+
+When connecting to a database over a network you don’t fully trust, make sure your connection is secure.
+
+With Postgres, use:
+
+```r
+db <- dbxConnect(adapter="postgres", sslmode="verify-full", sslrootcert="ca.pem")
+```
+
+With RMariaDB, use:
+
+```r
+db <- dbxConnect(adapter="mysql", ssl.ca="ca.pem")
+```
+
+Please [let us know](https://github.com/ankane/dbx/issues/new) if you have a way that works with RMySQL.
+
+## Variables
+
+Set session variables with:
+
+```r
+db <- dbxConnect(variables=list(search_path="archive"))
+```
+
+## Timeouts
+
+Set a statement timeout with:
+
+```r
+# Postgres
+db <- dbxConnect(variables=list(statement_timeout=1000)) # ms
+
+# MySQL 5.7.8+
+db <- dbxConnect(variables=list(max_execution_time=1000)) # ms
+
+# MariaDB 10.1.1+
+db <- dbxConnect(variables=list(max_statement_time=1)) # sec
+```
+
+With Postgres, set a connect timeout with:
+
+```r
+db <- dbxConnect(connect_timeout=3)
+```
 
 ## Reference
 

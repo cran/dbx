@@ -1,3 +1,7 @@
+isPostgres <- function(conn) {
+  isRPostgreSQL(conn) || isRPostgres(conn) || isODBCPostgres(conn)
+}
+
 isRPostgreSQL <- function(conn) {
   inherits(conn, "PostgreSQLConnection")
 }
@@ -6,8 +10,8 @@ isRPostgres <- function(conn) {
   inherits(conn, "PqConnection")
 }
 
-isPostgres <- function(conn) {
-  isRPostgreSQL(conn) || isRPostgres(conn)
+isODBCPostgres <- function(conn) {
+  inherits(conn, "PostgreSQL")
 }
 
 isRMySQL <- function(conn) {
@@ -15,7 +19,7 @@ isRMySQL <- function(conn) {
 }
 
 isMySQL <- function(conn) {
-  isRMySQL(conn) || isRMariaDB(conn)
+  isRMySQL(conn) || isRMariaDB(conn) || isODBCMySQL(conn)
 }
 
 isRMariaDB <- function(conn) {
@@ -24,4 +28,16 @@ isRMariaDB <- function(conn) {
 
 isSQLite <- function(conn) {
   inherits(conn, "SQLiteConnection")
+}
+
+isODBCMySQL <- function(conn) {
+  inherits(conn, "MySQL")
+}
+
+isSQLServer <- function(conn) {
+  inherits(conn, "Microsoft SQL Server")
+}
+
+isODBC <- function(conn) {
+  !is.null(attr(conn, "info")$odbc.version)
 }

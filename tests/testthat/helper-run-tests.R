@@ -1,3 +1,6 @@
+# set time zone
+Sys.setenv(TZ="America/Los_Angeles")
+
 runTests <- function(db, redshift=FALSE) {
   orders <- data.frame(id=c(1, 2), city=c("San Francisco", "Boston"), stringsAsFactors=FALSE)
   new_orders <- data.frame(id=c(3, 4), city=c("New York", "Atlanta"), stringsAsFactors=FALSE)
@@ -60,6 +63,8 @@ runTests <- function(db, redshift=FALSE) {
     } else if (isSQLite(db)) {
       # until proper typecasting
       expect_identical(res$active, as.numeric())
+    } else if (isODBCPostgres(db)) {
+      expect_identical(res$active, as.character())
     } else {
       expect_identical(res$active, as.logical())
     }
@@ -109,6 +114,8 @@ runTests <- function(db, redshift=FALSE) {
     } else if (isSQLite(db)) {
       # until proper typecasting
       expect_identical(res$active, as.numeric(NA))
+    } else if (isODBCPostgres(db)) {
+      expect_identical(res$active, as.character(NA))
     } else {
       expect_identical(res$active, NA)
     }
@@ -148,13 +155,25 @@ runTests <- function(db, redshift=FALSE) {
   })
 
   test_that("upsert works", {
-    skip_if(isSQLite(db) || redshift)
+    skip_if(isSQLite(db) || redshift || isSQLServer(db))
 
     upsert_orders <- data.frame(id=c(3, 5), city=c("Boston", "Chicago"))
     dbxUpsert(db, "orders", upsert_orders, where_cols=c("id"))
 
     res <- dbxSelect(db, "SELECT city FROM orders WHERE id IN (3, 5)")
     expect_equal(res$city, c("Boston", "Chicago"))
+
+    dbxDelete(db, "orders", data.frame(id=c(5)))
+  })
+
+  test_that("upsert only where_cols works", {
+    skip_if(isSQLite(db) || redshift || isSQLServer(db))
+
+    upsert_orders <- data.frame(id=c(3, 5))
+    dbxUpsert(db, "orders", upsert_orders, where_cols=c("id"))
+
+    res <- dbxSelect(db, "SELECT city FROM orders WHERE id IN (3, 5)")
+    expect_equal(res$city, c("Boston", NA))
 
     dbxDelete(db, "orders", data.frame(id=c(5)))
   })
@@ -271,6 +290,8 @@ runTests <- function(db, redshift=FALSE) {
 
     if (isSQLite(db) || isRMariaDB(db)) {
       res$active <- res$active != 0
+    } else if (isODBCPostgres(db)) {
+      res$active <- res$active != "0"
     }
 
     expect_equal(res$active, events$active)
@@ -419,7 +440,7 @@ runTests <- function(db, redshift=FALSE) {
 
   test_that("time zone is UTC", {
     # always utc
-    skip_if(isSQLite(db))
+    skip_if(isSQLite(db) || isSQLServer(db))
 
     if (isPostgres(db)) {
       expect_equal("UTC", dbxSelect(db, "SHOW timezone")$TimeZone)
@@ -453,7 +474,12 @@ runTests <- function(db, redshift=FALSE) {
 
     # test returned time
     res <- dbxSelect(db, "SELECT * FROM events ORDER BY id")
-    expect_equal(res$close_time, events$close_time)
+
+    if (isODBCPostgres(db)) {
+      expect_equal(res$close_time, paste0(events$close_time, "+00"))
+    } else {
+      expect_equal(res$close_time, events$close_time)
+    }
 
     # test stored time
     res <- dbxSelect(db, "SELECT COUNT(*) AS count FROM events WHERE close_time = '12:30:55'")
@@ -476,7 +502,7 @@ runTests <- function(db, redshift=FALSE) {
   })
 
   test_that("binary works", {
-    skip_if(redshift)
+    skip_if(redshift || isODBCPostgres(db) || isSQLServer(db))
 
     dbxDelete(db, "events")
 
@@ -497,7 +523,7 @@ runTests <- function(db, redshift=FALSE) {
   })
 
   test_that("blob with binary works", {
-    skip_if(redshift)
+    skip_if(redshift || isODBCPostgres(db) || isSQLServer(db))
 
     dbxDelete(db, "events")
 
@@ -517,9 +543,21 @@ runTests <- function(db, redshift=FALSE) {
     expect_equal(blob::as.blob(res$image), events$image)
   })
 
+  test_that("ts uses observation values", {
+    dbxDelete(db, "events")
+
+    events <- data.frame(counter=ts(1:3, start=c(2018, 1), end=c(2018, 3), frequency=12))
+    dbxInsert(db, "events", events)
+
+    res <- dbxSelect(db, "SELECT * FROM events ORDER BY id")
+    expect_equal(res$counter, as.integer(events$counter))
+  })
+
   # very important
   # shows typecasting is consistent
   test_that("can update what what just selected and get same result", {
+    skip_if(isODBCPostgres(db) || isSQLServer(db))
+
     dbxDelete(db, "events")
 
     df <- data.frame(

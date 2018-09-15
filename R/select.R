@@ -10,7 +10,6 @@
 #' records <- dbxSelect(db, "SELECT * FROM forecasts")
 dbxSelect <- function(conn, statement) {
   statement <- processStatement(statement)
-  ret <- list()
   cast_dates <- list()
   cast_datetimes <- list()
   convert_tz <- list()
@@ -18,55 +17,51 @@ dbxSelect <- function(conn, statement) {
   stringify_json <- list()
   unescape_blobs <- list()
   fix_timetz <- list()
-  column_info <- NULL
+  change_tz <- list()
 
-  silenceWarnings(c("length of NULL cannot be changed", "unrecognized MySQL field type", "unrecognized PostgreSQL field type", "(unknown (", "Decimal MySQL column"), {
-    res <- dbSendQuery(conn, statement)
+  r <- fetchRecords(conn, statement)
+  records <- r$records
+  column_info <- r$column_info
 
-    if (isRPostgreSQL(conn)) {
-      column_info <- dbColumnInfo(res)
-      sql_types <- tolower(column_info$type)
+  # typecasting
+  if (isRPostgreSQL(conn)) {
+    sql_types <- tolower(column_info$type)
 
-      if (storageTimeZone(conn) != currentTimeZone()) {
-        convert_tz <- which(sql_types == "timestamp")
-      }
-
-      unescape_blobs <- which(sql_types == "bytea")
-      fix_timetz <- which(sql_types == "timetzoid")
-    } else if (isRPostgres(conn)) {
-      column_info <- dbColumnInfo(res)
-      sql_types <- column_info$`.typname`
-
-      if (storageTimeZone(conn) != currentTimeZone()) {
-        convert_tz <- which(sql_types == "timestamp")
-      }
-
-      stringify_json <- which(sql_types %in% c("json", "jsonb"))
-    } else if (isRMySQL(conn)) {
-      column_info <- dbColumnInfo(res)
-      sql_types <- tolower(column_info$type)
-
-      cast_dates <- which(sql_types == "date")
-      cast_datetimes <- which(sql_types %in% c("datetime", "timestamp"))
-      cast_booleans <- which(sql_types == "tinyint" & column_info$length == 1)
-    } else if (isRMariaDB(conn)) {
-      # TODO cast booleans for RMariaDB
-      # waiting on https://github.com/r-dbi/RMariaDB/issues/100
-    } else if (isSQLite(conn)) {
-      # TODO cast dates and times for RSQLite
-      # waiting on https://github.com/r-dbi/RSQLite/issues/263
+    if (storageTimeZone(conn) != currentTimeZone()) {
+      convert_tz <- which(sql_types == "timestamp")
     }
 
-    # always fetch at least once
-    ret[[length(ret) + 1]] <- dbFetch(res)
+    unescape_blobs <- which(sql_types == "bytea")
+    fix_timetz <- which(sql_types == "timetzoid")
+  } else if (isRPostgres(conn)) {
+    sql_types <- column_info$`.typname`
 
-    while (!dbHasCompleted(res)) {
-      ret[[length(ret) + 1]] <- dbFetch(res)
+    if (storageTimeZone(conn) != currentTimeZone()) {
+      convert_tz <- which(sql_types == "timestamp")
     }
-    dbClearResult(res)
-  })
 
-  records <- combineResults(ret)
+    stringify_json <- which(sql_types %in% c("json", "jsonb"))
+  } else if (isRMySQL(conn)) {
+    sql_types <- tolower(column_info$type)
+
+    cast_dates <- which(sql_types == "date")
+    cast_datetimes <- which(sql_types %in% c("datetime", "timestamp"))
+    cast_booleans <- which(sql_types == "tinyint" & column_info$length == 1)
+  } else if (isRMariaDB(conn)) {
+    # TODO cast booleans for RMariaDB
+    # waiting on https://github.com/r-dbi/RMariaDB/issues/100
+  } else if (isSQLite(conn)) {
+    # TODO cast dates and times for RSQLite
+    # waiting on https://github.com/r-dbi/RSQLite/issues/263
+  } else if (isODBC(conn)) {
+    # TODO cast booleans for Postgres ODBC
+    # https://github.com/r-dbi/odbc/issues/108
+    # booleans currently returned as VARCHAR
+    # print(column_info)
+    sql_types = column_info$type
+    change_tz <- which(sql_types == 93)
+    cast_booleans <- which(sql_types == -6)
+  }
 
   # fix for empty data frame
   # until new RPostgreSQL version is published
@@ -89,6 +84,10 @@ dbxSelect <- function(conn, statement) {
 
   for (i in stringify_json) {
     records[, i] <- as.character(records[, i])
+  }
+
+  for (i in change_tz) {
+    attr(records[, i], "tzone") <- currentTimeZone()
   }
 
   if (nrow(records) > 0) {
@@ -144,6 +143,31 @@ dbxSelect <- function(conn, statement) {
   }
 
   records
+}
+
+fetchRecords <- function(conn, statement) {
+  ret <- list()
+  column_info <- NULL
+
+  silenceWarnings(c("length of NULL cannot be changed", "unrecognized MySQL field type", "unrecognized PostgreSQL field type", "(unknown (", "Decimal MySQL column"), {
+    res <- NULL
+    timeStatement(statement, {
+      res <- dbSendQuery(conn, statement)
+    })
+
+    # always fetch at least once
+    ret[[length(ret) + 1]] <- dbFetch(res)
+
+    # must come after first fetch call for SQLite
+    column_info <- dbColumnInfo(res)
+
+    while (!dbHasCompleted(res)) {
+      ret[[length(ret) + 1]] <- dbFetch(res)
+    }
+    dbClearResult(res)
+  })
+
+  list(records=combineResults(ret), column_info=column_info)
 }
 
 emptyType <- function(type) {
