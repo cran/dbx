@@ -4,12 +4,14 @@
 \alias{dbxSelect}
 \title{Select records}
 \usage{
-dbxSelect(conn, statement)
+dbxSelect(conn, statement, params = NULL)
 }
 \arguments{
 \item{conn}{A DBIConnection object}
 
 \item{statement}{The SQL statement to use}
+
+\item{params}{Parameters to bind}
 }
 \description{
 Select records
@@ -18,5 +20,9 @@ Select records
 db <- dbxConnect(adapter="sqlite", dbname=":memory:")
 DBI::dbCreateTable(db, "forecasts", data.frame(id=1:3, temperature=20:22))
 
-records <- dbxSelect(db, "SELECT * FROM forecasts")
+dbxSelect(db, "SELECT * FROM forecasts")
+
+dbxSelect(db, "SELECT * FROM forecasts WHERE id = ?", params=list(1))
+
+dbxSelect(db, "SELECT * FROM forecasts WHERE id IN (?)", params=list(1:3))
 }

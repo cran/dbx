@@ -1,3 +1,9 @@
+# dbx 0.2.3
+
+- Added parameters for `dbxSelect`
+- Added `skip_existing` option to `dbxUpsert`
+- Fixed issue with `batch_size` option skipping partial batches
+
 # dbx 0.2.2
 
 - Added statement duration to logging

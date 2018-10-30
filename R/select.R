@@ -2,13 +2,18 @@
 #'
 #' @param conn A DBIConnection object
 #' @param statement The SQL statement to use
+#' @param params Parameters to bind
 #' @export
 #' @examples
 #' db <- dbxConnect(adapter="sqlite", dbname=":memory:")
 #' DBI::dbCreateTable(db, "forecasts", data.frame(id=1:3, temperature=20:22))
 #'
-#' records <- dbxSelect(db, "SELECT * FROM forecasts")
-dbxSelect <- function(conn, statement) {
+#' dbxSelect(db, "SELECT * FROM forecasts")
+#'
+#' dbxSelect(db, "SELECT * FROM forecasts WHERE id = ?", params=list(1))
+#'
+#' dbxSelect(db, "SELECT * FROM forecasts WHERE id IN (?)", params=list(1:3))
+dbxSelect <- function(conn, statement, params=NULL) {
   statement <- processStatement(statement)
   cast_dates <- list()
   cast_datetimes <- list()
@@ -19,7 +24,7 @@ dbxSelect <- function(conn, statement) {
   fix_timetz <- list()
   change_tz <- list()
 
-  r <- fetchRecords(conn, statement)
+  r <- fetchRecords(conn, statement, params)
   records <- r$records
   column_info <- r$column_info
 
@@ -145,13 +150,41 @@ dbxSelect <- function(conn, statement) {
   records
 }
 
-fetchRecords <- function(conn, statement) {
+fetchRecords <- function(conn, statement, params) {
   ret <- list()
   column_info <- NULL
 
   silenceWarnings(c("length of NULL cannot be changed", "unrecognized MySQL field type", "unrecognized PostgreSQL field type", "(unknown (", "Decimal MySQL column"), {
     res <- NULL
     timeStatement(statement, {
+      if (!is.null(params)) {
+        # count number of occurences in base R
+        expected <- lengths(regmatches(statement, gregexpr("?", statement, fixed=TRUE)))
+        if (length(params) != expected) {
+          stop("Wrong number of params")
+        }
+
+        quoteParam <- function(x) {
+          dbQuoteLiteral(conn, castData(conn, x))
+        }
+
+        params <- lapply(params, function(x) {
+          if (length(x) == 0) {
+            dbQuoteLiteral(conn, as.character(NA))
+          } else {
+            paste(lapply(x, quoteParam), collapse=",")
+          }
+        })
+
+        for (param in params) {
+          # TODO better regex
+          # TODO support escaping
+          # knex uses \? https://github.com/tgriesser/knex/pull/1058/files
+          # odbc uses ?? https://stackoverflow.com/questions/14779896/does-the-jdbc-spec-prevent-from-being-used-as-an-operator-outside-of-quotes
+          statement <- sub("?", param, statement, fixed=TRUE)
+        }
+      }
+
       res <- dbSendQuery(conn, statement)
     })
 
