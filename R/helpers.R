@@ -1,5 +1,3 @@
-#' @importFrom DBI dbConnect dbDisconnect dbExecute dbQuoteIdentifier dbQuoteLiteral dbSendQuery dbFetch dbClearResult dbHasCompleted dbColumnInfo dbBind
-
 isPostgres <- function(conn) {
   isRPostgreSQL(conn) || isRPostgres(conn) || isODBCPostgres(conn)
 }
@@ -113,16 +111,16 @@ isTime <- function(col) {
   inherits(col, "hms")
 }
 
-isLogical <- function(col) {
-  inherits(col, "logical")
-}
-
 isBinary <- function(col) {
-  is.raw(col[[1]])
+  any(sapply(col, is.raw))
 }
 
 isBlob <- function(col) {
   inherits(col, "blob")
+}
+
+isDifftime <- function(col) {
+  inherits(col, "difftime")
 }
 
 selectOrExecute <- function(conn, sql, records, returning) {
@@ -144,8 +142,40 @@ selectOrExecute <- function(conn, sql, records, returning) {
 execute <- function(conn, statement) {
   statement <- processStatement(statement)
   timeStatement(statement, {
-    dbExecute(conn, statement)
+    DBI::dbExecute(conn, statement)
   })
+}
+
+addParams <- function(conn, statement, params) {
+  if (!is.null(params)) {
+    # count number of occurences in base R
+    expected <- lengths(regmatches(statement, gregexpr("?", statement, fixed=TRUE)))
+    if (length(params) != expected) {
+      stop("Wrong number of params")
+    }
+
+    quoteParam <- function(x) {
+      DBI::dbQuoteLiteral(conn, castData(conn, x))
+    }
+
+    params <- lapply(params, function(x) {
+      if (length(x) == 0) {
+        DBI::dbQuoteLiteral(conn, as.character(NA))
+      } else {
+        paste(lapply(x, quoteParam), collapse=",")
+      }
+    })
+
+    for (param in params) {
+      # TODO better regex
+      # TODO support escaping
+      # knex uses \? https://github.com/tgriesser/knex/pull/1058/files
+      # odbc uses ?? https://stackoverflow.com/questions/14779896/does-the-jdbc-spec-prevent-from-being-used-as-an-operator-outside-of-quotes
+      statement <- sub("?", param, statement, fixed=TRUE)
+    }
+  }
+
+  statement
 }
 
 processStatement <- function(statement) {
@@ -222,20 +252,22 @@ currentTimeZone <- function() {
 }
 
 quoteIdent <- function(conn, cols) {
-  as.character(dbQuoteIdentifier(conn, cols))
+  as.character(DBI::dbQuoteIdentifier(conn, cols))
 }
 
 quoteRecords <- function(conn, records) {
   quoted_records <- data.frame(matrix(ncol=0, nrow=nrow(records)))
   for (i in 1:ncol(records)) {
     col <- castData(conn, records[, i])
-    quoted_records[, i] <- dbQuoteLiteral(conn, col)
+    quoted_records[, i] <- DBI::dbQuoteLiteral(conn, col)
   }
   quoted_records
 }
 
 castData <- function(conn, col) {
-  if (isMySQL(conn)) {
+  if (isMySQL(conn) || isSQLite(conn) || isSQLServer(conn)) {
+    # since no standard for SQLite, store dates and datetimes in the same format as Rails
+    # store times without dates as strings to keep things simple
     if (isDatetime(col)) {
       col <- format(col, tz=storageTimeZone(conn), "%Y-%m-%d %H:%M:%OS6")
     } else if (isDate(col)) {
@@ -248,7 +280,7 @@ castData <- function(conn, col) {
       col <- format(col, tz=storageTimeZone(conn), "%Y-%m-%d %H:%M:%OS6 %Z")
     } else if (isTime(col)) {
       col <- format(col)
-    } else if (isLogical(col) && isRPostgreSQL(conn)) {
+    } else if (is.logical(col) && isRPostgreSQL(conn)) {
       col <- as.character(col)
     } else if (isDate(col) && isRPostgreSQL(conn)) {
       col <- format(col)
@@ -259,25 +291,13 @@ castData <- function(conn, col) {
         # removes AsIs
         col <- blob::as.blob(lapply(col, function(x) { x }))
       }
+    } else if (isDifftime(col) && isRPostgres(conn)) {
+      col <- as.character(col)
     }
-  } else if (isSQLite(conn)) {
-    # since no standard, store dates and datetimes in the same format as Rails
-    # store times without dates as strings to keep things simple
-    if (isDatetime(col)) {
-      col <- format(col, tz=storageTimeZone(conn), "%Y-%m-%d %H:%M:%OS6")
-    } else if (isDate(col)) {
-      col <- format(col)
-    } else if (isTime(col)) {
-      col <- format(col)
-    }
-  } else if (isSQLServer(conn)) {
-    if (isDatetime(col)) {
-      col <- format(col, tz=storageTimeZone(conn), "%Y-%m-%d %H:%M:%OS6")
-    } else if (isDate(col)) {
-      col <- format(col)
-    } else if (isTime(col)) {
-      col <- format(col)
-    }
+  }
+
+  if (is.complex(col)) {
+    col <- format(col)
   }
 
   col

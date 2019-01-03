@@ -111,7 +111,7 @@ dbxSelect <- function(conn, statement, params=NULL) {
     }
 
     for (i in unescape_blobs) {
-      records[[colnames(records)[i]]] <- lapply(records[, i], function(x) { if (is.na(x)) as.raw(NULL) else RPostgreSQL::postgresqlUnescapeBytea(x) })
+      records[[colnames(records)[i]]] <- lapply(records[, i], function(x) { if (is.na(x)) NULL else RPostgreSQL::postgresqlUnescapeBytea(x) })
     }
 
     for (i in fix_timetz) {
@@ -125,7 +125,10 @@ dbxSelect <- function(conn, statement, params=NULL) {
 
     uncast_blobs <- which(sapply(records, isBlob))
     for (i in uncast_blobs) {
-      records[[colnames(records)[i]]] <- lapply(records[, i], as.raw)
+      col <- lapply(records[, i], as.raw)
+      null_vector <- as.raw(NULL)
+      col <- lapply(col, function(x) { if (identical(x, null_vector)) NULL else x })
+      records[[colnames(records)[i]]] <- col
     }
   } else {
     for (i in cast_dates) {
@@ -155,49 +158,23 @@ fetchRecords <- function(conn, statement, params) {
   column_info <- NULL
 
   silenceWarnings(c("length of NULL cannot be changed", "unrecognized MySQL field type", "unrecognized PostgreSQL field type", "(unknown (", "Decimal MySQL column"), {
+    statement <- addParams(conn, statement, params)
+
     res <- NULL
     timeStatement(statement, {
-      if (!is.null(params)) {
-        # count number of occurences in base R
-        expected <- lengths(regmatches(statement, gregexpr("?", statement, fixed=TRUE)))
-        if (length(params) != expected) {
-          stop("Wrong number of params")
-        }
-
-        quoteParam <- function(x) {
-          dbQuoteLiteral(conn, castData(conn, x))
-        }
-
-        params <- lapply(params, function(x) {
-          if (length(x) == 0) {
-            dbQuoteLiteral(conn, as.character(NA))
-          } else {
-            paste(lapply(x, quoteParam), collapse=",")
-          }
-        })
-
-        for (param in params) {
-          # TODO better regex
-          # TODO support escaping
-          # knex uses \? https://github.com/tgriesser/knex/pull/1058/files
-          # odbc uses ?? https://stackoverflow.com/questions/14779896/does-the-jdbc-spec-prevent-from-being-used-as-an-operator-outside-of-quotes
-          statement <- sub("?", param, statement, fixed=TRUE)
-        }
-      }
-
-      res <- dbSendQuery(conn, statement)
+      res <- DBI::dbSendQuery(conn, statement)
     })
 
     # always fetch at least once
-    ret[[length(ret) + 1]] <- dbFetch(res)
+    ret[[length(ret) + 1]] <- DBI::dbFetch(res)
 
     # must come after first fetch call for SQLite
-    column_info <- dbColumnInfo(res)
+    column_info <- DBI::dbColumnInfo(res)
 
-    while (!dbHasCompleted(res)) {
-      ret[[length(ret) + 1]] <- dbFetch(res)
+    while (!DBI::dbHasCompleted(res)) {
+      ret[[length(ret) + 1]] <- DBI::dbFetch(res)
     }
-    dbClearResult(res)
+    DBI::dbClearResult(res)
   })
 
   list(records=combineResults(ret), column_info=column_info)

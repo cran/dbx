@@ -118,21 +118,36 @@ runSelectTests <- function(db) {
 
     # binary
     if (isRMySQL(db)) {
-      # no way to tell text and blobs apart
+      # RMySQL cannot return binary data
       expect_identical(class(res$image), "character")
     } else {
       expect_identical(class(res$image), "list")
-
-      if (isRMariaDB(db)) {
-        expect_identical(class(res$image[[1]]), "NULL")
-      } else {
-        expect_identical(res$image[[1]], as.raw(NULL))
-      }
+      expect_null(res$image[[1]])
     }
   })
 
+  test_that("string (character) params works", {
+    events <- data.frame(city=c("Boston", "San Francisco"))
+    dbxInsert(db, "events", events)
+
+    params <- list("Boston")
+    sql <- "SELECT COUNT(*) AS count FROM events WHERE city = ?"
+    res <- dbxSelect(db, sql, params=params)
+    expect_equal(res$count, 1)
+  })
+
+  test_that("string (complex) params works", {
+    events <- data.frame(city=c(1+4i, 2+2i))
+    dbxInsert(db, "events", events)
+
+    params <- list(1+4i)
+    sql <- "SELECT COUNT(*) AS count FROM events WHERE city = ?"
+    res <- dbxSelect(db, sql, params=params)
+    expect_equal(res$count, 1)
+  })
+
   test_that("integer params works", {
-    events <- data.frame(counter=c(1, 2))
+    events <- data.frame(counter=c(1L, 2L))
     dbxInsert(db, "events", events)
 
     params <- list(1)
@@ -141,7 +156,7 @@ runSelectTests <- function(db) {
     expect_equal(res$count, 1)
   })
 
-  test_that("float params works", {
+  test_that("float (double) params works", {
     events <- data.frame(speed=c(1.2, 3.4))
     dbxInsert(db, "events", events)
 
@@ -151,7 +166,7 @@ runSelectTests <- function(db) {
     expect_equal(res$count, 1)
   })
 
-  test_that("decimal params works", {
+  test_that("decimal (double) params works", {
     events <- data.frame(distance=c(1.2, 3.4))
     dbxInsert(db, "events", events)
 
@@ -161,7 +176,7 @@ runSelectTests <- function(db) {
     expect_equal(res$count, 1)
   })
 
-  test_that("boolean params works", {
+  test_that("boolean (logical) params works", {
     events <- data.frame(active=c(TRUE, FALSE))
     dbxInsert(db, "events", events)
 
@@ -199,6 +214,26 @@ runSelectTests <- function(db) {
 
     params <- list(c("12:30:55"))
     sql <- "SELECT COUNT(*) AS count FROM events WHERE open_time = ?"
+    res <- dbxSelect(db, sql, params=params)
+    expect_equal(res$count, 1)
+  })
+
+  test_that("difftimes work", {
+    events <- data.frame(distance=as.difftime(c("12:30:55", "16:59:59")), stringsAsFactors=FALSE)
+    dbxInsert(db, "events", events)
+
+    params <- list(as.difftime(c("12:30:55")))
+    sql <- "SELECT COUNT(*) AS count FROM events WHERE distance = ?"
+    res <- dbxSelect(db, sql, params=params)
+    expect_equal(res$count, 1)
+  })
+
+  test_that("factor params works", {
+    events <- data.frame(city=c("Boston", "San Francisco"))
+    dbxInsert(db, "events", events)
+
+    params <- list(factor("Boston"))
+    sql <- "SELECT COUNT(*) AS count FROM events WHERE city = ?"
     res <- dbxSelect(db, sql, params=params)
     expect_equal(res$count, 1)
   })
