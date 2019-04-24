@@ -1,3 +1,9 @@
+# dbx 0.2.5
+
+- Added support for tibbles
+- Improved error message for invalid database URL
+- Fixed error when `where_cols` ordering different than data frame
+
 # dbx 0.2.4
 
 - Added `dbxExecute` function

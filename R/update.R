@@ -16,7 +16,7 @@
 dbxUpdate <- function(conn, table, records, where_cols, batch_size=NULL) {
   cols <- colnames(records)
 
-  if (!identical(intersect(cols, where_cols), where_cols)) {
+  if (!setequal(intersect(cols, where_cols), where_cols)) {
     stop("where_cols not in records")
   }
 
@@ -34,7 +34,7 @@ dbxUpdate <- function(conn, table, records, where_cols, batch_size=NULL) {
 
     withTransaction(conn, {
       for (group in groups) {
-        row <- group[1,, drop=FALSE]
+        row <- group[1, , drop=FALSE]
         sql <- paste("UPDATE", quoted_table, "SET", setClause(quoted_update_cols, row[update_cols]), "WHERE", whereClause(quoted_where_cols, group[where_cols]))
         execute(conn, sql)
       }
