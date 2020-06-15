@@ -1,6 +1,6 @@
 runUpsertTests <- function(db, redshift=FALSE) {
   upsertSupported <- function() {
-    !(isSQLite(db) || redshift || isSQLServer(db))
+    !(redshift || isSQLServer(db))
   }
 
   test_that("upsert works", {
@@ -54,6 +54,6 @@ runUpsertTests <- function(db, redshift=FALSE) {
 
   test_that("empty upsert works", {
     dbxUpsert(db, "events", data.frame(id = as.numeric(), active = as.logical()), where_cols=c("id"))
-    expect(TRUE)
+    expect_true(TRUE)
   })
 }

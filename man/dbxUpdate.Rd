@@ -4,7 +4,14 @@
 \alias{dbxUpdate}
 \title{Update records}
 \usage{
-dbxUpdate(conn, table, records, where_cols, batch_size = NULL)
+dbxUpdate(
+  conn,
+  table,
+  records,
+  where_cols,
+  batch_size = NULL,
+  transaction = TRUE
+)
 }
 \arguments{
 \item{conn}{A DBIConnection object}
@@ -16,6 +23,8 @@ dbxUpdate(conn, table, records, where_cols, batch_size = NULL)
 \item{where_cols}{The columns to use for WHERE clause}
 
 \item{batch_size}{The number of records to update in a single transaction (defaults to all)}
+
+\item{transaction}{Wrap the update in a transaction (defaults to true)}
 }
 \description{
 Update records

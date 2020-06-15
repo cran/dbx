@@ -322,6 +322,12 @@ DBI::dbWithTransaction(db, {
 })
 ```
 
+For updates inside a transaction, use:
+
+```r
+dbxUpdate(db, transaction=FALSE)
+```
+
 ## Data Type Notes
 
 ### Dates & Times
