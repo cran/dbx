@@ -1,7 +1,7 @@
-923efcf8bcd4dcd95964ede670b27c08 *DESCRIPTION
+1029eb21a2dda3f913725a76cdb992a1 *DESCRIPTION
 bf2513e183124d305d71489a27b1dc19 *LICENSE
 f7d79b6131d84c0b38f7e52877179c35 *NAMESPACE
-0a5f3d7dfe7cbcdc1e2f36bb586150f5 *NEWS.md
+3b5ce6e0abb60c44de7c7834b0d94f21 *NEWS.md
 fb33435fd9ac47cf92dd77dd6198131a *R/connect.R
 b460a62cf8374b0f260076fccf700c9b *R/delete.R
 cb96f2bfbd4229ab80ac47f4962866aa *R/disconnect.R
@@ -25,7 +25,7 @@ f3ed6f040165f3032f844d3f482c9194 *tests/testthat/helper-hex-to-raw.R
 a2600e9d99dea5d33ec581576ca91318 *tests/testthat/helper-in-time-zone.R
 7fb605ccfd1d72e1fc66f87be5030d31 *tests/testthat/helper-is.R
 7ad9c65386744c933ef2691b4c1b8104 *tests/testthat/helper-reverse.R
-93757bc1149da3fa379d86b69b9dc31e *tests/testthat/helper-run-data-type-tests.R
+9d710f46a448b5c2d2e24af633ea8171 *tests/testthat/helper-run-data-type-tests.R
 4e932c82ca47f4d12ed783616625f1bf *tests/testthat/helper-run-delete-tests.R
 8a09b89123f1406641987a4f6b28af2d *tests/testthat/helper-run-execute-tests.R
 621ba8abddc195d02d9e4209ff49aa8f *tests/testthat/helper-run-insert-tests.R
@@ -39,7 +39,7 @@ a2600e9d99dea5d33ec581576ca91318 *tests/testthat/helper-in-time-zone.R
 f3463a14bd8e82ab1f64cd0f6402c82c *tests/testthat/test-odbc-mysql.R
 a34a6305263f5df670ab6488046c5cd0 *tests/testthat/test-odbc-postgres.R
 a557382ef99ae507498c4d731a4df5ef *tests/testthat/test-odbc-sqlserver.R
-e9605c72c8e124c56e7a7566696f1d93 *tests/testthat/test-postgres.R
-dcc6c828d7f29b7d6f389296fa66dea2 *tests/testthat/test-postgresql.R
+8c69bf189a2a170b5b1423f993d1ad61 *tests/testthat/test-postgres.R
+475230474cb7f833f986f419fde1e2b7 *tests/testthat/test-postgresql.R
 75afe6d03ddec2aae382712af99e4cb2 *tests/testthat/test-redshift.R
 0dfccbb2e946f8363cd3977e2b80a92b *tests/testthat/test-sqlite.R

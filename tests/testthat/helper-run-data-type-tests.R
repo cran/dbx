@@ -149,6 +149,9 @@ runDataTypeTests <- function(db, redshift=FALSE) {
       attr(res$updated_at, "tzone") <- Sys.timezone()
     }
 
+    # for R-devel
+    attr(events$updated_at, "tzone") <- Sys.timezone()
+
     expect_equal(res$updated_at, events$updated_at)
 
     # test stored time
@@ -163,6 +166,9 @@ runDataTypeTests <- function(db, redshift=FALSE) {
     t2 <- as.POSIXct("2018-01-01 16:59:59", tz="America/New_York")
     events <- data.frame(deleted_at=c(t1, t2))
     dbxInsert(db, "events", events)
+
+    # for R-devel
+    attr(events$deleted_at, "tzone") <- Sys.timezone()
 
     # test returned time
     res <- dbxSelect(db, "SELECT * FROM events ORDER BY id")
