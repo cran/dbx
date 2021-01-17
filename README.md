@@ -16,7 +16,7 @@ Supports Postgres, MySQL, MariaDB, SQLite, and more
 
 ![Screenshot](https://gist.github.com/ankane/b6988db2802aca68a589b31e41b44195/raw/619e19addf388c14e905ed475121fe5806bf8991/dbx.png)
 
-[![Build Status](https://travis-ci.org/ankane/dbx.svg?branch=master)](https://travis-ci.org/ankane/dbx) [![CRAN status](https://www.r-pkg.org/badges/version/dbx)](https://cran.r-project.org/package=dbx)
+[![Build Status](https://github.com/ankane/dbx/workflows/build/badge.svg?branch=master)](https://github.com/ankane/dbx/actions) [![CRAN status](https://www.r-pkg.org/badges/version/dbx)](https://cran.r-project.org/package=dbx)
 
 ## Installation
 
@@ -328,6 +328,14 @@ For updates inside a transaction, use:
 dbxUpdate(db, transaction=FALSE)
 ```
 
+## Schemas
+
+To specify a schema in Postgres, use:
+
+```r
+table <- DBI::Id(schema="schema", table="table")
+```
+
 ## Data Type Notes
 
 ### Dates & Times
@@ -337,7 +345,7 @@ Dates are returned as `Date` objects and times as `POSIXct` objects. Times are s
 Times without dates are returned as `character` vectors since R has no built-in support for this type. If you use [hms](https://cran.r-project.org/package=hms), you can convert columns with:
 
 ```r
-records$column <- hms::as.hms(records$column)
+records$column <- hms::as_hms(records$column)
 ```
 
 SQLite does not have support for `TIME` columns, so we recommend storing as `VARCHAR`.
