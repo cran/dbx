@@ -31,11 +31,7 @@ dbxSelect <- function(conn, statement, params=NULL) {
   # typecasting
   if (isRPostgreSQL(conn)) {
     sql_types <- tolower(column_info$type)
-
-    if (storageTimeZone(conn) != currentTimeZone()) {
-      convert_tz <- which(sql_types == "timestamp")
-    }
-
+    convert_tz <- which(sql_types == "timestamp")
     unescape_blobs <- which(sql_types == "bytea")
     fix_timetz <- which(sql_types == "timetzoid")
   } else if (isRPostgres(conn)) {
@@ -69,9 +65,7 @@ dbxSelect <- function(conn, statement, params=NULL) {
   }
 
   # fix for empty data frame
-  # until new RPostgreSQL version is published
-  # https://github.com/tomoakin/RPostgreSQL/commit/f93cb17cf584d57ced5045a46d16d2bfe05a2769
-  if (isRPostgreSQL(conn) && ncol(records) == 0) {
+  if (isRPostgreSQL(conn) && (ncol(records) == 0 || nrow(records) == 0)) {
     for (i in 1:nrow(column_info)) {
       row <- column_info[i, ]
       records[, i] <- emptyType(row$Sclass)
@@ -157,7 +151,7 @@ fetchRecords <- function(conn, statement, params) {
   ret <- list()
   column_info <- NULL
 
-  silenceWarnings(c("length of NULL cannot be changed", "unrecognized MySQL field type", "unrecognized PostgreSQL field type", "(unknown (", "Decimal MySQL column"), {
+  silenceWarnings(c("length of NULL cannot be changed", "unrecognized MySQL field type", "unrecognized PostgreSQL field type", "unknown (", "Decimal MySQL column"), {
     statement <- addParams(conn, statement, params)
 
     res <- NULL

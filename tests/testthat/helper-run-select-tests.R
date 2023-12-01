@@ -77,7 +77,7 @@ runSelectTests <- function(db) {
   })
 
   test_that("empty cells", {
-    dbxInsert(db, "events", data.frame(properties=NA))
+    dbxInsert(db, "events", data.frame(counter=as.integer(NA)))
     res <- dbxSelect(db, "SELECT * FROM events")
 
     # numeric
@@ -259,6 +259,9 @@ runSelectTests <- function(db) {
   })
 
   test_that("empty vector params works", {
+    # due to https://github.com/r-dbi/RPostgres/pull/370
+    skip_if(isRPostgres(db))
+
     events <- data.frame(counter=c(1, 2))
     dbxInsert(db, "events", events)
 

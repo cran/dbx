@@ -14,9 +14,7 @@ Designed for both research and production environments
 
 Supports Postgres, MySQL, MariaDB, SQLite, and more
 
-![Screenshot](https://gist.github.com/ankane/b6988db2802aca68a589b31e41b44195/raw/619e19addf388c14e905ed475121fe5806bf8991/dbx.png)
-
-[![Build Status](https://github.com/ankane/dbx/workflows/build/badge.svg?branch=master)](https://github.com/ankane/dbx/actions) [![CRAN status](https://www.r-pkg.org/badges/version/dbx)](https://cran.r-project.org/package=dbx)
+[![Build Status](https://github.com/ankane/dbx/actions/workflows/build.yml/badge.svg?branch=master)](https://github.com/ankane/dbx/actions) [![CRAN status](https://www.r-pkg.org/badges/version/dbx)](https://cran.r-project.org/package=dbx)
 
 ## Installation
 
@@ -180,6 +178,8 @@ Use `where_cols` to specify the columns used for lookup. Other columns are writt
 
 ### Upsert
 
+*Only available for PostgreSQL 9.5+, MySQL 5.5+, and SQLite 3.24+*
+
 *Atomically* insert if they don’t exist, otherwise update them
 
 ```r
@@ -188,8 +188,6 @@ dbxUpsert(db, table, records, where_cols=c("id"))
 ```
 
 Use `where_cols` to specify the columns used for lookup. There must be a unique index on them, or an error will be thrown.
-
-*Only available for PostgreSQL 9.5+, MySQL 5.5+, and SQLite 3.24+*
 
 To skip existing rows instead of updating them, use:
 
@@ -330,7 +328,7 @@ dbxUpdate(db, transaction=FALSE)
 
 ## Schemas
 
-To specify a schema in Postgres, use:
+To specify a schema, use:
 
 ```r
 table <- DBI::Id(schema="schema", table="table")
@@ -553,7 +551,7 @@ Everyone is encouraged to help improve this project. Here are a few ways you can
 - Write, clarify, or fix documentation
 - Suggest or add new features
 
-To get started with development and testing:
+To get started with development:
 
 ```sh
 git clone https://github.com/ankane/dbx.git
@@ -563,7 +561,7 @@ cd dbx
 createdb dbx_test
 
 # create MySQL database
-mysql -u root -e "CREATE DATABASE dbx_test"
+mysqladmin create dbx_test
 ```
 
 In R, do:

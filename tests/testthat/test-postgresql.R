@@ -2,6 +2,10 @@ context("postgresql")
 
 skip_on_cran()
 
+# https://github.com/tomoakin/RPostgreSQL/pull/119
+# TODO remove when released
+skip_on_os("windows")
+
 db <- dbxConnect(adapter="rpostgresql", dbname="dbx_test")
 
 dbxExecute(db, "DROP TABLE IF EXISTS events")
@@ -20,7 +24,7 @@ test_that("datetimes with storage_tz works", {
     dbxInsert(db2, "events", events)
 
     # for R-devel
-    attr(events$updated_at, "tzone") <- Sys.timezone()
+    attr(events$updated_at, "tzone") <- currentTimeZone()
 
     # test returned time
     res <- dbxSelect(db2, "SELECT * FROM events ORDER BY id")
