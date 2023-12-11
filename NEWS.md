@@ -1,3 +1,8 @@
+## 0.3.1 (2023-12-11)
+
+- Added support for `dbxUpsert` for SQL Server
+- Fixed typecasting with ODBC
+
 ## 0.3.0 (2023-11-30)
 
 - Fixed issue with RMariaDB 1.3.0+

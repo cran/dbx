@@ -14,7 +14,7 @@ Designed for both research and production environments
 
 Supports Postgres, MySQL, MariaDB, SQLite, and more
 
-[![Build Status](https://github.com/ankane/dbx/actions/workflows/build.yml/badge.svg?branch=master)](https://github.com/ankane/dbx/actions) [![CRAN status](https://www.r-pkg.org/badges/version/dbx)](https://cran.r-project.org/package=dbx)
+[![Build Status](https://github.com/ankane/dbx/actions/workflows/build.yml/badge.svg)](https://github.com/ankane/dbx/actions) [![CRAN status](https://www.r-pkg.org/badges/version/dbx)](https://cran.r-project.org/package=dbx)
 
 ## Installation
 
@@ -178,7 +178,7 @@ Use `where_cols` to specify the columns used for lookup. Other columns are writt
 
 ### Upsert
 
-*Only available for PostgreSQL 9.5+, MySQL 5.5+, and SQLite 3.24+*
+*Available for PostgreSQL 9.5+, MySQL 5.5+, SQLite 3.24+, and SQL Server 2008+*
 
 *Atomically* insert if they don’t exist, otherwise update them
 
@@ -518,26 +518,6 @@ To close a connection, use:
 dbxDisconnect(db)
 ```
 
-## Upgrading
-
-### 0.2.0
-
-Version 0.2.0 brings a number of fixes and improvements to data types.
-
-However, there a few breaking changes to be aware of:
-
-- The `dbxInsert` and `dbxUpsert` functions no longer return a data frame by default. For MySQL and SQLite, the data frame was just the `records` argument. For Postgres, if you use auto-incrementing primary keys, the data frame contained ids of the newly inserted/upserted records. To get the ids, pass name of the column as the `returning` argument:
-
-  ```r
-  dbxInsert(db, table, records, returning=c("id"))
-  ```
-
-- `timestamp without time zone` columns in Postgres are now stored in UTC instead of local time by default. This does not affect `timestamp with time zone` columns. To keep the previous behavior, use:
-
-  ```r
-  dbxConnect(adapter="postgres", storage_tz=Sys.timezone(), ...)
-  ```
-
 ## History
 
 View the [changelog](https://github.com/ankane/dbx/blob/master/NEWS.md)
@@ -570,4 +550,11 @@ In R, do:
 install.packages("devtools")
 devtools::install_deps(dependencies=TRUE)
 devtools::test()
+```
+
+To test a single file, use:
+
+```r
+devtools::install() # to use latest updates
+devtools::test_active_file("tests/testthat/test-postgres.R")
 ```
