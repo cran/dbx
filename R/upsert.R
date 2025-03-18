@@ -26,7 +26,11 @@ dbxUpsert <- function(conn, table, records, where_cols, batch_size=NULL, returni
 
   update_cols <- setdiff(cols, where_cols)
   if (length(update_cols) == 0) {
-    update_cols <- where_cols[1]
+    if (is.null(returning) || isDuckDB(conn)) {
+      skip_existing <- TRUE
+    } else {
+      update_cols <- where_cols[1]
+    }
   }
 
   # quote
@@ -50,10 +54,13 @@ dbxUpsert <- function(conn, table, records, where_cols, batch_size=NULL, returni
       quoted_cols <- quoteIdent(conn, cols)
       on_sql <- upsertOnClauseSQLServer(quoted_where_cols)
 
-      sql <- paste0("MERGE ", quoted_table, " WITH (HOLDLOCK) AS t USING (VALUES ", valuesClause(conn, batch), ") AS s (", colsClause(quoted_cols), ") ON (", on_sql, ") WHEN NOT MATCHED BY TARGET THEN INSERT (", colsClause(quoted_cols) , ") VALUES (", colsClause(quoted_cols), ")")
+      sql <- paste0("MERGE ", quoted_table, " WITH (HOLDLOCK) AS t USING (VALUES ", valuesClause(conn, batch), ") AS s (", colsClause(quoted_cols), ") ON (", on_sql, ") WHEN NOT MATCHED BY TARGET THEN INSERT (", colsClause(quoted_cols), ") VALUES (", colsClause(quoted_cols), ")")
       if (!skip_existing) {
         set_sql <- upsertSetClauseSQLServer(quoted_update_cols)
         sql <- paste(sql, "WHEN MATCHED THEN UPDATE SET", set_sql)
+      }
+      if (!is.null(returning)) {
+        sql <- paste0(sql, outputClause(conn, returning))
       }
       selectOrExecute(conn, paste0(sql, ";"), batch, returning=returning)
     } else {

@@ -31,6 +31,7 @@ And follow the instructions for your database
 - [SQLite](#sqlite)
 - [SQL Server](#sql-server)
 - [Redshift](#redshift)
+- [DuckDB](#duckdb)
 - [Others](#others)
 
 To install with [Jetpack](https://github.com/ankane/jetpack), use:
@@ -117,6 +118,22 @@ You can also pass `uid`, `pwd`, `server`, and `port`.
 
 For Redshift, follow the [Postgres instructions](#postgres).
 
+### DuckDB
+
+Install the R package
+
+```r
+install.packages("duckdb")
+```
+
+And use:
+
+```r
+library(dbx)
+
+db <- dbxConnect(adapter=duckdb::duckdb(), dbdir=":memory:")
+```
+
 ### Others
 
 Install the appropriate R package and use:
@@ -157,11 +174,13 @@ records <- data.frame(temperature=c(32, 25))
 dbxInsert(db, table, records)
 ```
 
-If you use auto-incrementing ids in Postgres, you can get the ids of newly inserted rows by passing the column name:
+If you use auto-incrementing ids, you can get the ids of newly inserted rows by passing the column name:
 
 ```r
 dbxInsert(db, table, records, returning=c("id"))
 ```
+
+> `returning` is not available for MySQL or Redshift
 
 ### Update
 
@@ -178,8 +197,6 @@ Use `where_cols` to specify the columns used for lookup. Other columns are writt
 
 ### Upsert
 
-*Available for PostgreSQL 9.5+, MySQL 5.5+, SQLite 3.24+, and SQL Server 2008+*
-
 *Atomically* insert if they don’t exist, otherwise update them
 
 ```r
@@ -195,11 +212,13 @@ To skip existing rows instead of updating them, use:
 dbxUpsert(db, table, records, where_cols=c("id"), skip_existing=TRUE)
 ```
 
-If you use auto-incrementing ids in Postgres, you can get the ids of newly upserted rows by passing the column name:
+If you use auto-incrementing ids, you can get the ids of newly upserted rows by passing the column name:
 
 ```r
 dbxUpsert(db, table, records, where_cols=c("id"), returning=c("id"))
 ```
+
+> `returning` is not available for MySQL or Redshift
 
 ### Delete
 
@@ -496,6 +515,12 @@ With Postgres, set a connect timeout with:
 db <- dbxConnect(connect_timeout=3) # sec
 ```
 
+With SQL Server, set a connect timeout with:
+
+```r
+db <- dbxConnect(timeout=3) # sec
+```
+
 ## Compatibility
 
 All connections are simply [DBI](https://cran.r-project.org/package=DBI) connections, so you can use them anywhere you use DBI.
@@ -557,4 +582,23 @@ To test a single file, use:
 ```r
 devtools::install() # to use latest updates
 devtools::test_active_file("tests/testthat/test-postgres.R")
+```
+
+To test the ODBC adapter, use:
+
+```sh
+brew install mariadb-connector-odbc psqlodbc
+# or
+sudo apt-get install odbc-mariadb odbc-postgresql
+```
+
+To test SQL Server, use:
+
+```sh
+brew install freetds
+# or
+sudo apt-get install tdsodbc
+
+docker run -e 'ACCEPT_EULA=Y' -e 'SA_PASSWORD=YourStrong!Passw0rd' -p 1433:1433 -d mcr.microsoft.com/mssql/server:2022-latest
+docker exec -it <container-id> /opt/mssql-tools18/bin/sqlcmd -S localhost -U SA -P YourStrong\!Passw0rd -C -Q "CREATE DATABASE dbx_test"
 ```

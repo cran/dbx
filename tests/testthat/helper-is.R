@@ -47,3 +47,15 @@ isSQLServer <- function(conn) {
 isODBC <- function(conn) {
   !is.null(attr(conn, "info")$odbc.version)
 }
+
+isDuckDB <- function(conn) {
+  inherits(conn, "duckdb_connection")
+}
+
+isMac <- function() {
+  Sys.info()["sysname"] == "Darwin"
+}
+
+returningSupported <- function(conn) {
+  isPostgres(conn) || isMariaDB(conn) || isSQLite(conn) || isSQLServer(conn) || isDuckDB(conn)
+}

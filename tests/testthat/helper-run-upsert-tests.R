@@ -6,14 +6,16 @@ runUpsertTests <- function(db, redshift=FALSE) {
   test_that("upsert works", {
     skip_if_not(upsertSupported())
 
-    events <- data.frame(id=c(1, 2), city=c("San Francisco", "Boston"), stringsAsFactors=FALSE)
+    events <- data.frame(id=c(1, 2), city=c("San Francisco", "Boston"), counter=c(4, 5), stringsAsFactors=FALSE)
     dbxInsert(db, "events", events)
 
     upsert_events <- data.frame(id=c(2, 3), city=c("Chicago", "New York"))
     dbxUpsert(db, "events", upsert_events, where_cols=c("id"))
 
-    res <- dbxSelect(db, "SELECT city FROM events ORDER BY id")
+    res <- dbxSelect(db, "SELECT id, city, counter FROM events ORDER BY id")
+    expect_equal(res$id, c(1, 2, 3))
     expect_equal(res$city, c("San Francisco", "Chicago", "New York"))
+    expect_equal(res$counter, c(4, 5, NA))
   })
 
   test_that("upsert only where_cols works", {
@@ -27,6 +29,22 @@ runUpsertTests <- function(db, redshift=FALSE) {
 
     res <- dbxSelect(db, "SELECT city FROM events ORDER BY id")
     expect_equal(res$city, c("San Francisco", "Boston", NA))
+  })
+
+  test_that("upsert only where_cols returning works", {
+    skip_if(!returningSupported(db) || redshift)
+
+    events <- data.frame(id=c(1, 2), city=c("San Francisco", "Boston"), stringsAsFactors=FALSE)
+    dbxInsert(db, "events", events)
+
+    upsert_events <- data.frame(id=c(2, 3))
+    res <- dbxUpsert(db, "events", upsert_events, where_cols=c("id"), returning=c("id"))
+
+    if (isDuckDB(db)) {
+      expect_equal(res$id, c(3))
+    } else {
+      expect_equal(res$id, c(2, 3))
+    }
   })
 
   test_that("upsert skip_existing works", {
@@ -58,13 +76,40 @@ runUpsertTests <- function(db, redshift=FALSE) {
   })
 
   test_that("upsert returning works", {
-    skip_if(!(isPostgres(db) || isMariaDB(db)) || redshift)
+    skip_if(!returningSupported(db) || redshift)
 
     events <- data.frame(id=c(1, 2), city=c("San Francisco", "Boston"), stringsAsFactors=FALSE)
     res <- dbxUpsert(db, "events", events, where_cols=c("id"), returning=c("id", "city"))
 
     expect_equal(res$id, c(1, 2))
     expect_equal(res$city, events$city)
+
+    upsert_events <- data.frame(id=c(2, 3), city=c("Chicago", "New York"))
+    res <- dbxUpsert(db, "events", upsert_events, where_cols=c("id"), returning=c("id", "city"))
+
+    expect_equal(res$id, c(2, 3))
+    expect_equal(res$city, upsert_events$city)
+  })
+
+  test_that("upsert skip_existing returning works", {
+    skip_if(!returningSupported(db) || redshift)
+
+    events <- data.frame(id=c(1, 2), city=c("San Francisco", "Boston"), stringsAsFactors=FALSE)
+    res <- dbxUpsert(db, "events", events, where_cols=c("id"), skip_existing=TRUE, returning=c("id", "city"))
+
+    expect_equal(res$id, c(1, 2))
+    expect_equal(res$city, events$city)
+
+    upsert_events <- data.frame(id=c(2, 3), city=c("Chicago", "New York"))
+    res <- dbxUpsert(db, "events", upsert_events, where_cols=c("id"), skip_existing=TRUE, returning=c("id", "city"))
+
+    if (isMariaDB(db)) {
+      expect_equal(res$id, c(2, 3))
+      expect_equal(res$city, c("Boston", "New York"))
+    } else {
+      expect_equal(res$id, c(3))
+      expect_equal(res$city, c("New York"))
+    }
   })
 
   test_that("upsert returning inserted works", {
@@ -76,6 +121,9 @@ runUpsertTests <- function(db, redshift=FALSE) {
     upsert_events <- data.frame(id=c(2, 3), city=c("Chicago", "New York"))
     res <- dbxUpsert(db, "events", upsert_events, where_cols=c("id"), returning=DBI::SQL("(xmax = 0) AS inserted"))
 
+    if (isODBCPostgres(db)) {
+      res$inserted <- res$inserted != "0"
+    }
     expect_equal(res$inserted, c(FALSE, TRUE))
   })
 

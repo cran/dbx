@@ -31,7 +31,7 @@ isSQLite <- function(conn) {
 }
 
 isODBCMySQL <- function(conn) {
-  inherits(conn, "MySQL")
+  inherits(conn, "MySQL") || inherits(conn, "MariaDB")
 }
 
 isSQLServer <- function(conn) {
@@ -42,8 +42,12 @@ isODBC <- function(conn) {
   !is.null(attr(conn, "info")$odbc.version)
 }
 
+isDuckDB <- function(conn) {
+  inherits(conn, "duckdb_connection")
+}
+
 equalClause <- function(cols, row) {
-  lapply(1:length(cols), function (i) { paste(cols[i], "=", row[[i]]) })
+  lapply(seq_along(cols), function(i) { paste(cols[i], "=", row[[i]]) })
 }
 
 upsertSetClause <- function(cols) {
@@ -99,7 +103,20 @@ valuesClause <- function(conn, records) {
   paste0("(", rows, ")", collapse=", ")
 }
 
-insertClause <- function(conn, table, records) {
+quoteReturning <- function(conn, returning) {
+  if (inherits(returning, "SQL")) {
+    # should be a no-op, but quote for safety
+    quoteIdent(conn, returning)
+  } else {
+    lapply(returning, function(x) { if (x == "*") x else quoteIdent(conn, x) })
+  }
+}
+
+outputClause <- function(conn, returning) {
+  paste0(" OUTPUT ", paste(paste0("INSERTED.", quoteReturning(conn, returning)), collapse=", "))
+}
+
+insertClause <- function(conn, table, records, returning=NULL) {
   cols <- colnames(records)
 
   # quote
@@ -108,7 +125,14 @@ insertClause <- function(conn, table, records) {
 
   cols_sql <- colsClause(quoted_cols)
   records_sql <- valuesClause(conn, records)
-  paste0("INSERT INTO ", quoted_table, " (", cols_sql, ") VALUES ", records_sql)
+
+  if (!is.null(returning) && isSQLServer(conn)) {
+    output_sql <- outputClause(conn, returning)
+  } else {
+    output_sql <- ""
+  }
+
+  paste0("INSERT INTO ", quoted_table, " (", cols_sql, ")", output_sql, " VALUES ", records_sql)
 }
 
 isDate <- function(col) {
@@ -139,21 +163,10 @@ selectOrExecute <- function(conn, sql, records, returning) {
   if (is.null(returning)) {
     execute(conn, sql)
     invisible()
+  } else if (isSQLServer(conn)) {
+    dbxSelect(conn, sql)
   } else {
-    # allow for any MySQL adapter for now
-    # TODO add detection for MariaDB
-    if (!isPostgres(conn) && !isMySQL(conn)) {
-      stop("returning is only supported with Postgres and MariaDB")
-    }
-
-    if (inherits(returning, "SQL")) {
-      # should be a no-op, but quote for safety
-      returning_clause <- paste(quoteIdent(conn, returning), collapse=", ")
-    } else {
-      returning_clause <- paste(lapply(returning, function(x) { if (x == "*") x else quoteIdent(conn, x) }), collapse=", ")
-    }
-    sql <- paste(sql, "RETURNING", returning_clause)
-
+    sql <- paste(sql, "RETURNING", paste(quoteReturning(conn, returning), collapse=","))
     dbxSelect(conn, sql)
   }
 }
@@ -243,7 +256,7 @@ inBatches <- function(records, batch_size, f) {
         if (end > row_count) {
           end <- row_count
         }
-        ret[[length(ret) + 1]] <- f(records[start:end,, drop=FALSE])
+        ret[[length(ret) + 1]] <- f(records[start:end, , drop=FALSE])
       }
       combineResults(ret)
     }
@@ -276,15 +289,15 @@ quoteIdent <- function(conn, cols) {
 
 quoteRecords <- function(conn, records) {
   quoted_records <- data.frame(matrix(ncol=0, nrow=nrow(records)))
-  for (i in 1:ncol(records)) {
-    col <- castData(conn, records[, i, drop=T])
+  for (i in seq_len(ncol(records))) {
+    col <- castData(conn, records[, i, drop=TRUE])
     quoted_records[, i] <- DBI::dbQuoteLiteral(conn, col)
   }
   quoted_records
 }
 
 castData <- function(conn, col) {
-  if (isMySQL(conn) || isSQLite(conn) || isSQLServer(conn)) {
+  if (isMySQL(conn) || isSQLite(conn) || isSQLServer(conn) || isDuckDB(conn)) {
     # since no standard for SQLite, store dates and datetimes in the same format as Rails
     # store times without dates as strings to keep things simple
     if (isDatetime(col)) {
@@ -299,7 +312,7 @@ castData <- function(conn, col) {
       col <- format(col, tz=storageTimeZone(conn), "%Y-%m-%d %H:%M:%OS6 %Z")
     } else if (isTime(col)) {
       col <- format(col)
-    } else if (is.logical(col) && isRPostgreSQL(conn)) {
+    } else if (is.logical(col) && (isRPostgreSQL(conn) || isODBCPostgres(conn))) {
       col <- as.character(col)
     } else if (isDate(col) && isRPostgreSQL(conn)) {
       col <- format(col)
